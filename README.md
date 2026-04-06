@@ -227,7 +227,7 @@ Training uses a **two-phase strategy** that combines the global exploration of a
 #### Phase 1: Adam + Cosine Annealing (4000 epochs)
 
 $$
-\eta(\text{epoch}) = \eta_\text{min} + \frac{1}{2}(\eta_0 - \eta_\text{min})\left(1 + \cos\!\left(\frac{\pi \cdot \text{epoch}}{\text{T\_max}}\right)\right)
+\eta(\text{epoch}) = \eta_{\min} + \frac{1}{2}(\eta_0 - \eta_{\min})\left(1 + \cos\!\left(\frac{\pi \cdot \text{epoch}}{T_{\max}}\right)\right)
 $$
 
 - **Initial LR** $\eta_0 = 3 \times 10^{-3}$, **Minimum LR** $\eta_\text{min} = 10^{-5}$
