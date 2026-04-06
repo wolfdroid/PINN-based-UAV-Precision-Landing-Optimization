@@ -19,7 +19,7 @@
 
 </div>
 
-> **Abstract.** This project presents a Physics-Informed Neural Network (PINN) approach to autonomous UAV precision landing under wind disturbances, implemented independently in both Python (PyTorch + CUDA) and Julia (Flux.jl + multi-threaded CPU). The network learns a time-parameterized control policy by directly embedding 6-DOF rigid-body flight dynamics—including aerodynamic drag and an optional ground-effect model—into its loss function, eliminating the need for a separate trajectory optimizer at inference time. Training employs a two-phase strategy: global exploration via Adam with cosine-annealing learning-rate scheduling, followed by local precision refinement using L-BFGS with strong-Wolfe line search. The two implementations are architecturally identical, enabling a rigorous cross-language benchmark that quantifies wall-clock timing, per-epoch cost, and final trajectory accuracy—shedding light on the practical trade-offs between GPU-accelerated automatic differentiation (PyTorch) and CPU-parallel multi-threaded linear algebra (Julia).
+> **Abstract.** This project presents a Physics-Informed Neural Network (PINN) approach to autonomous UAV precision landing under wind disturbances, implemented independently in both Python (PyTorch + CUDA) and Julia (Flux.jl + multi-threaded CPU). The network learns a time-parameterized control policy by directly embedding 6-DOF rigid-body flight dynamics—including aerodynamic drag and an optional ground-effect model—into its loss function, eliminating the need for a separate trajectory optimizer at inference time. Training employs a two-phase strategy: global exploration via Adam with cosine-annealing learning-rate scheduling, followed by local precision refinement using L-BFGS with strong-backtracking line search. The two implementations are architecturally identical, enabling a rigorous cross-language benchmark that quantifies wall-clock timing, per-epoch cost, and final trajectory accuracy—shedding light on the practical trade-offs between GPU-accelerated automatic differentiation (PyTorch) and CPU-parallel multi-threaded linear algebra (Julia).
 
 ---
 
@@ -237,13 +237,13 @@ $$
 
 Adam's adaptive moment estimates allow it to navigate the highly non-convex loss landscape efficiently during the early phase, where the network must simultaneously satisfy four competing objectives. Cosine annealing prevents the LR from decaying too aggressively before the network has settled into a good basin.
 
-#### Phase 2: L-BFGS + Strong Wolfe Line Search (500 macro-steps)
+#### Phase 2: L-BFGS + BackTracking Line Search (500 macro-steps)
 
 Once Phase 1 has found a good basin, L-BFGS exploits local curvature information to achieve rapid convergence to a high-precision solution:
 
 - **History size**: 50 (number of past gradient/step pairs stored)
 - **Max inner iterations per macro-step**: 20
-- **Line search**: Strong Wolfe conditions ($c_1 = 10^{-4}$, $c_2 = 0.9$)
+- **Line search**: Strong BackTracking conditions ($order=3$)
 - **Tolerance**: $10^{-7}$ (gradient norm)
 
 ⚡ **Why two phases?** L-BFGS requires the loss to be reasonably smooth and the current iterate to be near a local minimum—conditions that are not met at random initialisation. Starting with L-BFGS directly leads to line-search failures and divergence. Adam's stochasticity (random mini-batches) helps escape saddle points and flat regions, delivering L-BFGS to a neighbourhood where its quadratic convergence rate pays off.
@@ -358,7 +358,7 @@ flowchart TD
 
     M -->|done| X[Phase 2: L-BFGS\nhistory=50 max_iter=20]
     X --> Y[closure\nsample_task fixed seed\nforward → loss → backward]
-    Y --> Z[strong_wolfe\nline search\nc1=1e-4 c2=0.9]
+    Y --> Z[strong_backtrack\nline search\nc1=1e-4 c2=0.9]
     Z --> AA{500 macro-steps}
     AA --> X
     AA -->|done| AB[torch.save\nmodel_state_dict\nadam_state_dict checkpoint]
@@ -407,7 +407,7 @@ flowchart TD
     J -->|done| T[Phase 2: Optim.jl L-BFGS]
     T --> U[flatten params\nDestructure.destructure\nθ_vec Float64]
     U --> V[fg! closure\nunflatten → model\nforward loss grad\nflatten grad back]
-    V --> W[Optim.optimize\nL-BFGS StrongWolfe\nm=50 history]
+    V --> W[Optim.optimize\nL-BFGS StrongBacktrack\nm=50 history]
     W --> X{500 iterations}
     X --> T
     X -->|done| Y[unflatten best params\nupdate model in-place]
@@ -432,7 +432,7 @@ flowchart TD
 | Aspect | Python (PyTorch) | Julia (Flux.jl) | Impact on Benchmark |
 |---|---|---|---|
 | **AD method for PDE residual** | `torch.autograd.grad` — exact, differentiable, O(machine ε) | Central finite differences: `(f(τ+ε)−f(τ−ε))/(2ε)`, ε=5e-5, O(ε²) | Python: lower PDE residual; Julia: small numerical noise in loss landscape |
-| **Phase 2 optimizer** | `torch.optim.LBFGS` with `strong_wolfe` line search, history=50, max_iter=20 | `Optim.jl` L-BFGS with `LineSearches.StrongWolfe()`, m=50 | Functionally equivalent; Julia requires manual param flatten/unflatten |
+| **Phase 2 optimizer** | `torch.optim.LBFGS` with `strong_backtrack` line search, history=50, max_iter=20 | `Optim.jl` L-BFGS with `LineSearches.Strongbacktrack()`, m=50 | Functionally equivalent; Julia requires manual param flatten/unflatten |
 | **Compute target** | CUDA GPU (or MPS / CPU fallback) | Multi-threaded CPU via OpenBLAS / MKL | GPU offers massive throughput advantage for large batch forward passes |
 | **Tensor layout** | `(B, N, D)` — batch × collocation × features (row-major C order) | `(D, B·N)` — features × flattened (column-major Fortran order) | Memory layout affects cache efficiency; Julia's column-major is natural for BLAS |
 | **Gradient clipping** | `clip_grad_norm_` — single global norm across all parameters | `Flux.fmap` — independent norm clipping per parameter tensor | Per-tensor clipping is more aggressive; can slow convergence of large parameter matrices |
@@ -653,7 +653,7 @@ Pkg.add([
     "Optimisers",     # Adam, SGD and other first-order optimizers
     "ForwardDiff",    # Forward-mode AD (utilities)
     "Optim",          # L-BFGS and other advanced optimizers
-    "LineSearches",   # Strong Wolfe line search for L-BFGS
+    "LineSearches",   # Strong backtrack line search for L-BFGS
     "Plots",          # Plotting (GR backend)
     "XLSX",           # Excel file export
     "Random",         # Random number generation (stdlib)
