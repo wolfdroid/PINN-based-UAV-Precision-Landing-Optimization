@@ -598,7 +598,7 @@ Both implementations should achieve position errors of $< 0.5$ m and velocity er
 
 ### 6.4 Multi-Scenario Evaluation Results
 
-*Values below are placeholders — run both scripts and fill in from the XLSX summary sheets.*
+*Values below are placeholders — run both scripts and check on the benchmark files that have been generated in assets ( for this case )*
 
 | Scenario | Target $(x,y)$ m | Wind $(v_x,v_y)$ m/s | Pos. Error (m) | Vel. Error (m/s) | Flight Time $T$ (s) | RK4 Max Dev. (m) |
 |---|---|---|---|---|---|---|
