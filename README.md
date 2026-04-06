@@ -237,13 +237,13 @@ $$
 
 Adam's adaptive moment estimates allow it to navigate the highly non-convex loss landscape efficiently during the early phase, where the network must simultaneously satisfy four competing objectives. Cosine annealing prevents the LR from decaying too aggressively before the network has settled into a good basin.
 
-#### Phase 2: L-BFGS + BackTracking Line Search (500 macro-steps)
+#### Phase 2: L-BFGS + StrongBackTracking Line Search (500 macro-steps)
 
 Once Phase 1 has found a good basin, L-BFGS exploits local curvature information to achieve rapid convergence to a high-precision solution:
 
 - **History size**: 50 (number of past gradient/step pairs stored)
 - **Max inner iterations per macro-step**: 20
-- **Line search**: Strong BackTracking conditions ($order=3$)
+- **Line search**: StrongBackTracking conditions ($order=3$)
 - **Tolerance**: $10^{-7}$ (gradient norm)
 
 ⚡ **Why two phases?** L-BFGS requires the loss to be reasonably smooth and the current iterate to be near a local minimum—conditions that are not met at random initialisation. Starting with L-BFGS directly leads to line-search failures and divergence. Adam's stochasticity (random mini-batches) helps escape saddle points and flat regions, delivering L-BFGS to a neighbourhood where its quadratic convergence rate pays off.
@@ -382,42 +382,42 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A([main]) --> B[parse_args\nepochs seed xlsx\n--no-ground-effect]
+    A([main]) --> B[parse_args\nepochs seed xlsx\nno-ground-effect]
     B --> C[Random.seed!\nset_seed Julia/BLAS]
-    C --> D[configure_threads!\nn_julia = Threads.nthreads\nn_blas = n_julia\nBLAS.set_num_threads]
+    C --> D[configure_threads!\nn_julia = Threads.nthreads()\nn_blas = n_julia\nBLAS.set_num_threads]
     D --> E[JIT warmup pass\ndummy forward+backward\nbefore timing starts]
 
     E --> F[UAVParams\nm=1.5 g=9.81\nk_dx k_dy k_dz\nR_rotor z0]
     F --> G[TrainConfig\nbatch=32 N=50\nw_pde=1 w_ic=40 w_bc=40\nw_ground=10]
-    G --> H[PINNModel\nFlux.Chain fc1..fc5\nskip connections\nFlux.@layer macro]
+    G --> H[PINNModel\nFlux Chain fc1..fc5\nskip connections\nFlux layer macro]
     H --> I[Flux.setup\nOptimisers.Adam lr=3e-3]
 
     I --> J{Phase 1 Loop\n4000 epochs}
-    J --> K[sample_task_threaded\n@threads B tasks\nrand xf yf vwx vwy]
-    K --> L[tau rand Float32\nshape 1 × B·N\ntask_c repeat B×N]
+    J --> K[sample_task_threaded\nthreaded batch tasks\nrand xf yf vwx vwy]
+    K --> L[tau rand Float32\nshape 1 x B*N\ntask_c repeat B*N]
     L --> M[Flux.withgradient\nforward pass model]
-    M --> N[compute_pinn_loss\ncentral FD: dS=\nmodel tau+ε - model tau-ε / 2ε\nR = dS/dtau - T·f]
+    M --> N[compute_pinn_loss\ncentral FD dS\nmodel tau+eps minus model tau-eps over 2eps\nR = dS_dtau - T*f]
     N --> O[L_PDE + L_IC + L_BC\n+ L_ground]
-    O --> P[Flux.fmap grads\nper-param norm clip\nnorm g > 5f0]
+    O --> P[Flux.fmap grads\nper-parameter norm clip\nnorm g > 5f0]
     P --> Q[cosine_lr manual\nOptimisers.adjust!]
     Q --> R[Optimisers.update!\nadam state]
     R --> S{log every 100}
     S --> J
 
-    J -->|done| T[Phase 2: Optim.jl L-BFGS]
-    T --> U[flatten params\nDestructure.destructure\nθ_vec Float64]
-    U --> V[fg! closure\nunflatten → model\nforward loss grad\nflatten grad back]
-    V --> W[Optim.optimize\nL-BFGS StrongBacktrack\nm=50 history]
+    J -->|done| T[Phase 2 Optim.jl L-BFGS]
+    T --> U[flatten params\nDestructure.destructure\ntheta_vec Float64]
+    U --> V[fg! closure\nunflatten to model\nforward loss grad\nflatten grad back]
+    V --> W[Optim.optimize\nL-BFGS StrongBackTracking()\nm=50 history]
     W --> X{500 iterations}
     X --> T
     X -->|done| Y[unflatten best params\nupdate model in-place]
 
     Y --> Z[evaluate_and_visualize\n4 scenarios]
-    Z --> AA[rk4_verify_all\n@threads 4 scenarios\ndt=0.01]
+    Z --> AA[rk4_verify_all\nthreaded 4 scenarios\ndt=0.01]
     AA --> AB[6-panel Plots.jl\nloss curves trajectory\ncontrol profiles]
     AB --> AC[multi_scenario 3D\nPlots.jl dark theme]
 
-    AC --> AD[export_xlsx\nXLSX.jl per-epoch\nSys.maxrss RAM\n/proc/self/stat CPU]
+    AC --> AD[export_xlsx\nXLSX.jl per-epoch\nSys.maxrss RAM\nproc stat CPU]
     AD --> AE([End])
 
     style A fill:#1e3a5f,color:#fff
