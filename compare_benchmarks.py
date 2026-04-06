@@ -123,6 +123,48 @@ def get_float(d, *keys):
     return None
 
 
+def read_phase_times_from_profiling(wb):
+    """Compute Adam and L-BFGS wall-clock times from the Training Profiling sheet.
+
+    Both Python and Julia exports write per-epoch rows with a Phase column
+    ('adam' / 'lbfgs') and a cumulative Wall Time column.  We derive:
+        adam_time  = max wall_time among adam rows
+        lbfgs_time = max wall_time overall - adam_time
+    Returns (adam_time, lbfgs_time); either may be None if data is absent.
+    """
+    if wb is None or 'Training Profiling' not in wb.sheetnames:
+        return None, None
+    ws = wb['Training Profiling']
+
+    # Locate Phase and Wall-Time columns from the header row
+    header = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
+    phase_col = next(
+        (i for i, h in enumerate(header)
+         if h and 'phase' in str(h).lower()), None)
+    wall_col = next(
+        (i for i, h in enumerate(header)
+         if h and 'wall' in str(h).lower() and 'time' in str(h).lower()), None)
+
+    if phase_col is None or wall_col is None:
+        return None, None
+
+    adam_max  = 0.0
+    total_max = 0.0
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        phase = str(row[phase_col]).strip().lower() if row[phase_col] is not None else ''
+        try:
+            t = float(row[wall_col])
+        except (TypeError, ValueError):
+            continue
+        if phase == 'adam':
+            adam_max = max(adam_max, t)
+        total_max = max(total_max, t)
+
+    adam_time  = round(adam_max, 2)              if adam_max  > 0 else None
+    lbfgs_time = round(total_max - adam_max, 2)  if total_max > adam_max else None
+    return adam_time, lbfgs_time
+
+
 # ─── Plot helpers ──────────────────────────────────────────────────────────────
 
 def style_ax(ax, title, xlabel, ylabel):
@@ -190,9 +232,19 @@ def main():
     total_py = get_float(sum_py, "Total Wall Time (s)", "Total Time(s)")
     total_jl = get_float(sum_jl, "Total Time(s)", "Total Wall Time (s)")
     adam_py  = get_float(sum_py, "Adam Phase Time (s)")
-    adam_jl  = get_float(sum_jl, "Adam Phase Time (s)")
     lbfgs_py = get_float(sum_py, "L-BFGS Phase Time (s)")
+    # Fallback: derive phase times from Training Profiling sheet
+    if adam_py is None or lbfgs_py is None:
+        _ap, _lp = read_phase_times_from_profiling(wb_py)
+        if adam_py  is None: adam_py  = _ap
+        if lbfgs_py is None: lbfgs_py = _lp
+    adam_jl  = get_float(sum_jl, "Adam Phase Time (s)")
     lbfgs_jl = get_float(sum_jl, "L-BFGS Phase Time (s)")
+    # Julia never writes phase times to Summary — always fall back
+    if adam_jl is None or lbfgs_jl is None:
+        _aj, _lj = read_phase_times_from_profiling(wb_jl)
+        if adam_jl  is None: adam_jl  = _aj
+        if lbfgs_jl is None: lbfgs_jl = _lj
     med_py   = get_float(sum_py, "Median Epoch Time (ms)", "Med Epoch(ms)")
     med_jl   = get_float(sum_jl, "Med Epoch(ms)", "Median Epoch Time (ms)")
 
