@@ -383,9 +383,9 @@ flowchart TD
 ```mermaid
 flowchart TD
     A([main]) --> B[parse_args\nepochs seed xlsx\nno-ground-effect]
-    B --> C[Random.seed!\nset_seed Julia/BLAS]
-    C --> D[configure_threads!\nn_julia = Threads.nthreads()\nn_blas = n_julia\nBLAS.set_num_threads]
-    D --> E[JIT warmup pass\ndummy forward+backward\nbefore timing starts]
+    B --> C[Random.seed!\nset_seed Julia BLAS]
+    C --> D[configure_threads\nn_julia from Threads.nthreads\nn_blas = n_julia\nBLAS.set_num_threads]
+    D --> E[JIT warmup pass\ndummy forward backward\nbefore timing starts]
 
     E --> F[UAVParams\nm=1.5 g=9.81\nk_dx k_dy k_dz\nR_rotor z0]
     F --> G[TrainConfig\nbatch=32 N=50\nw_pde=1 w_ic=40 w_bc=40\nw_ground=10]
@@ -394,11 +394,11 @@ flowchart TD
 
     I --> J{Phase 1 Loop\n4000 epochs}
     J --> K[sample_task_threaded\nthreaded batch tasks\nrand xf yf vwx vwy]
-    K --> L[tau rand Float32\nshape 1 x B*N\ntask_c repeat B*N]
+    K --> L[tau rand Float32\nshape 1 x B times N\ntask_c repeat B times N]
     L --> M[Flux.withgradient\nforward pass model]
-    M --> N[compute_pinn_loss\ncentral FD dS\nmodel tau+eps minus model tau-eps over 2eps\nR = dS_dtau - T*f]
+    M --> N[compute_pinn_loss\ncentral FD dS\nmodel tau plus eps minus model tau minus eps over 2 eps\nR = dS_dtau - T times f]
     N --> O[L_PDE + L_IC + L_BC\n+ L_ground]
-    O --> P[Flux.fmap grads\nper-parameter norm clip\nnorm g > 5f0]
+    O --> P[Flux.fmap grads\nper parameter norm clip\nnorm g > 5f0]
     P --> Q[cosine_lr manual\nOptimisers.adjust!]
     Q --> R[Optimisers.update!\nadam state]
     R --> S{log every 100}
@@ -406,8 +406,8 @@ flowchart TD
 
     J -->|done| T[Phase 2 Optim.jl L-BFGS]
     T --> U[flatten params\nDestructure.destructure\ntheta_vec Float64]
-    U --> V[fg! closure\nunflatten to model\nforward loss grad\nflatten grad back]
-    V --> W[Optim.optimize\nL-BFGS StrongBackTracking()\nm=50 history]
+    U --> V[fg closure\nunflatten to model\nforward loss grad\nflatten grad back]
+    V --> W[Optim.optimize\nL-BFGS StrongBackTracking\nm=50 history]
     W --> X{500 iterations}
     X --> T
     X -->|done| Y[unflatten best params\nupdate model in-place]
@@ -417,7 +417,7 @@ flowchart TD
     AA --> AB[6-panel Plots.jl\nloss curves trajectory\ncontrol profiles]
     AB --> AC[multi_scenario 3D\nPlots.jl dark theme]
 
-    AC --> AD[export_xlsx\nXLSX.jl per-epoch\nSys.maxrss RAM\nproc stat CPU]
+    AC --> AD[export_xlsx\nXLSX.jl per epoch\nSys.maxrss RAM\nproc stat CPU]
     AD --> AE([End])
 
     style A fill:#1e3a5f,color:#fff
