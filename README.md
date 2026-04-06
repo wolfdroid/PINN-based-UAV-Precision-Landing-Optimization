@@ -358,7 +358,7 @@ flowchart TD
 
     M -->|done| X[Phase 2: L-BFGS\nhistory=50 max_iter=20]
     X --> Y[closure\nsample_task fixed seed\nforward → loss → backward]
-    Y --> Z[strong_backtrack\nline search\nc1=1e-4 c2=0.9]
+    Y --> Z[strong_backtrack\nline search\]
     Z --> AA{500 macro-steps}
     AA --> X
     AA -->|done| AB[torch.save\nmodel_state_dict\nadam_state_dict checkpoint]
