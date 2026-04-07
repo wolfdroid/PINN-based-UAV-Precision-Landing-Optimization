@@ -632,8 +632,8 @@ Both implementations should achieve position errors of $< 0.5$ m and velocity er
 
 ```bash
 # Clone the repository
-git clone https://github.com/wolfdroid/PIINN_DRONE_LANDING.git
-cd PIINN_DRONE_LANDING
+git clone https://github.com/wolfdroid/PINN-based-UAV-Precision-Landing-Optimization.git
+cd PINN-based-UAV-Precision-Landing-Optimization
 
 # Install dependencies (GPU: ensure CUDA toolkit is installed first)
 pip install torch matplotlib numpy openpyxl psutil
